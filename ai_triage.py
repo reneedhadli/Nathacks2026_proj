@@ -55,6 +55,14 @@ SELF_HARM_PATTERNS = [
     r"suicid", r"kill myself", r"end my life", r"want to die", r"hurt myself",
     r"self[- ]?harm", r"overdos",
 ]
+MEDICAL_PATTERNS = [
+    r"can'?t breathe", r"cannot breathe", r"can ?not breathe", r"unable to breathe",
+    r"trouble breathing", r"hard to breathe", r"not breathing", r"stopped breathing",
+    r"\b(i'?m|im|i am) dying\b", r"\b(he|she|they)('?s| is| are) dying\b", r"someone is dying",
+    r"unconscious", r"unresponsive", r"passed out", r"collapsed", r"won'?t wake up",
+    r"chest pain", r"heart attack", r"seizure", r"choking", r"allergic reaction", r"anaphyla",
+    r"bleeding (a lot|badly|heavily)",
+]
 DANGER_PATTERNS = [
     r"following me", r"followed me", r"assault", r"attacked me", r"afraid for my life",
     r"threatened (me|to)", r"won'?t let me leave",
@@ -131,18 +139,25 @@ def _rules_triage(text, rules):
     category = KEYWORD_CATEGORY.get(rules.get("category"), "noise")
     urgency = KEYWORD_URGENCY.get(rules.get("urgency"), 2)
     distress = False
+    responder = None
+    reason = "Sorted by keyword rules (AI not used for this report)."
     if _matches(text, SELF_HARM_PATTERNS):
         distress, category, urgency = True, "wellbeing", 5
+        reason = "Keyword safety net: mentions possible self-harm."
+    elif _matches(text, MEDICAL_PATTERNS):
+        distress, category, urgency, responder = True, "safety", 5, "RA"
+        reason = "Keyword safety net: possible medical emergency."
     elif _matches(text, DANGER_PATTERNS):
         distress, category, urgency = True, "safety", 5
+        reason = "Keyword safety net: mentions being followed, threatened or attacked."
     summary = " ".join(text.split())[:117] + ("..." if len(text) > 117 else "")
     return {
         "category": category,
         "urgency": urgency,
         "summary": summary,
-        "responder": DEFAULT_RESPONDER[category],
+        "responder": responder or DEFAULT_RESPONDER[category],
         "distress": distress,
-        "reason": "Sorted by keyword rules (AI not used for this report).",
+        "reason": reason,
     }
 
 
