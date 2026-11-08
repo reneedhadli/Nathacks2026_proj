@@ -146,6 +146,7 @@ with st.container(key="card_what"):
         height=120,
         key=f"description_{st.session_state['map_id']}",
     )
+    st.caption("Please leave out names and phone numbers. A room number is fine.")
 
 with st.container(key="card_pin"):
     st.subheader("3. Pin the exact spot (optional)")
