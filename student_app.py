@@ -9,6 +9,7 @@ from streamlit_folium import st_folium
 
 from places import (MAP_CENTER as MAP_CENTER_TUPLE, SHARED_FLOOR, SHARED_SPACES,
                     SHARED_ZONE, TOWERS, ZONES)
+from ai_triage import triage_report
 from privacy_triage import process_incident
 from storage import load_data, save_data
 from ui import apply_theme, notice, page_title, site_footer
@@ -52,6 +53,14 @@ class SinglePin(MacroElement):
     """)
 
 
+def debug_on():
+    """Set DEBUG_AI="1" in secrets to see which engine sorted each report. Leave off for demos."""
+    try:
+        return str(st.secrets["DEBUG_AI"]) == "1"
+    except Exception:
+        return False
+
+
 st.set_page_config(page_title="Report an issue | Residence Safety", layout="centered")
 apply_theme("760px")
 
@@ -59,6 +68,8 @@ st.session_state.setdefault("lat", None)
 st.session_state.setdefault("lon", None)
 st.session_state.setdefault("map_id", 0)
 st.session_state.setdefault("ref", None)
+st.session_state.setdefault("distress", False)
+st.session_state.setdefault("ai_note", "")
 
 # =============== Screen 2: confirmation ===============
 if st.session_state["ref"]:
@@ -76,12 +87,24 @@ if st.session_state["ref"]:
             unsafe_allow_html=True,
         )
         st.caption("Keep your reference number. You never need to give your name.")
+    if st.session_state["distress"]:
+        with st.container(key="card_support"):
+            st.subheader("If you or someone else is in danger")
+            st.markdown(
+                "Call <b>911</b> now, or find an RA right away. "
+                "Your report has been flagged so the RA team sees it first.",
+                unsafe_allow_html=True,
+            )
+            # Add your campus support lines here after you confirm them with your RA.
+    if debug_on():
+        st.caption("Developer note. Sorted by: " + st.session_state["ai_note"])
     notice(
         "If anyone is in danger right now, call <b>911</b>. "
         "This form is not watched in real time."
     )
     if st.button("Report another issue", key="again_btn"):
         st.session_state["ref"] = None
+        st.session_state["distress"] = False
         st.session_state["lat"] = None
         st.session_state["lon"] = None
         st.session_state["map_id"] += 1
@@ -159,20 +182,28 @@ if st.button("Submit report", type="primary", key="submit_btn"):
     if not raw_text.strip():
         st.warning("Please describe what happened first.")
     else:
-        result = process_incident(raw_text)
+        result = process_incident(raw_text)  # removes phone numbers etc. + keyword rules
+        place = building if place_type == "Shared space" else f"{building}, {floor}, {zone}"
+        with st.spinner("Reviewing your report..."):
+            triage = triage_report(result["scrubbed_text"], place, result)
         saved = save_data(
             building,
             floor,
             zone,
             raw_text,
             result["scrubbed_text"],
-            result["category"],
-            result["urgency"],
+            triage["category"],
+            triage["urgency_label"],
             st.session_state["lat"],
             st.session_state["lon"],
+            extra=triage["extra"],
         )
         if saved is False:
             st.stop()  # storage.py already showed the error message
+        st.session_state["distress"] = triage["distress"]
+        st.session_state["ai_note"] = triage["source"] + (
+            f" ({triage['error']})" if triage["error"] else ""
+        )
         st.session_state["ref"] = f"R-{len(load_data()):04d}"
         st.rerun()
 
