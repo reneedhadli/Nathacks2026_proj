@@ -105,6 +105,27 @@ def get_passcode():
         return None
 
 
+def resolve_report(row_id):
+    """Mark a report resolved, then re-read the database to be sure it really changed."""
+    try:
+        update_status(row_id, "Resolved")
+    except Exception:
+        pass  # the check below reports the problem
+    fresh = load_data()
+    saved = len(fresh) and "id" in fresh.columns and (
+        fresh.loc[fresh["id"] == row_id, "status"] == "Resolved"
+    ).any()
+    if saved:
+        st.session_state["flash"] = ("ok", "Report marked as resolved.")
+    else:
+        st.session_state["flash"] = (
+            "error",
+            "The database did not save the change, so the report is still open. "
+            "This usually means the table has no UPDATE permission for the app "
+            "(row level security). Ask Yevhen to check the Supabase policies.",
+        )
+
+
 page_title(
     "RA Shift Handoff",
     "Every report from residence, sorted by urgency. AI helps sort and flag. An RA reads every report and decides.",
@@ -145,6 +166,10 @@ if top_right.button("Log out", key="logout_btn"):
 
 # Auto-refresh the page every 10 seconds
 st_autorefresh(interval=10000, limit=None, key="ra_dashboard_refresh")
+
+flash = st.session_state.pop("flash", None)
+if flash:
+    (st.success if flash[0] == "ok" else st.error)(flash[1])
 
 df = load_data()
 
@@ -226,8 +251,6 @@ with st.container(key="card_filters"):
 filtered_df = df.copy()
 if st.session_state["f_location"] != "All locations":
     filtered_df = filtered_df[filtered_df["building"] == st.session_state["f_location"]]
-if st.session_state["f_status"] != "All":
-    filtered_df = filtered_df[filtered_df["status"] == st.session_state["f_status"]]
 if st.session_state["f_urgency"]:
     filtered_df = filtered_df[filtered_df["urgency"].isin(st.session_state["f_urgency"])]
 if st.session_state["f_category"]:
@@ -252,6 +275,11 @@ if query:
     ) if len(filtered_df) else pd.Series([], dtype=str)
     filtered_df = filtered_df[haystack.str.contains(query, regex=False)] if len(filtered_df) else filtered_df
 
+# Status is applied last. scope_df keeps open AND resolved, so the Resolved tile is honest.
+scope_df = filtered_df
+if st.session_state["f_status"] != "All":
+    filtered_df = scope_df[scope_df["status"] == st.session_state["f_status"]]
+
 st.caption(f"Showing {len(filtered_df)} of {len(df)} reports")
 
 # --- Summary tiles ---
@@ -260,7 +288,7 @@ m1.metric("Shown", len(filtered_df))
 m2.metric("Possible distress", int(filtered_df["ai_distress"].sum()))
 m3.metric("High urgency", int((filtered_df["urgency"] == "High").sum()))
 m4.metric("Overdue", int(filtered_df["overdue"].sum()))
-m5.metric("Resolved", int((filtered_df["status"] == "Resolved").sum()))
+m5.metric("Resolved", int((scope_df["status"] == "Resolved").sum()))
 
 # --- DRAW MAP ---
 st.subheader("Patrol map")
@@ -311,7 +339,6 @@ else:
 
 
 # --- INCIDENT CARDS ---
-@st.fragment
 def render_triage_board(filtered_df, sort_choice):
     st.subheader("Incidents")
     st.caption(f"Sorted by: {sort_choice}")
@@ -369,9 +396,11 @@ def render_triage_board(filtered_df, sort_choice):
 
             with col_b:
                 if row["status"] == "Open":
-                    if st.button("Resolve", key=f"resolve_{uid}", type="primary"):
-                        update_status(row["id"], "Resolved")
-                        st.rerun()
+                    row_id = row["id"].item() if hasattr(row["id"], "item") else row["id"]
+                    st.button(
+                        "Resolve", key=f"resolve_{uid}", type="primary",
+                        on_click=resolve_report, args=(row_id,),
+                    )
                 else:
                     st.markdown('<span class="badge done">RESOLVED</span>', unsafe_allow_html=True)
 
