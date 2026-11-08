@@ -52,7 +52,6 @@ class SinglePin(MacroElement):
     """)
 
 
-st.set_page_config(page_title="Report an issue | Residence Safety", layout="centered")
 apply_theme("760px")
 
 st.session_state.setdefault("lat", None)

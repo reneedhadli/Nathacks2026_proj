@@ -13,7 +13,7 @@ from storage import load_data, update_status
 from timeutil import OVERDUE_AFTER_MIN, human_age, now_naive, parse_times
 from ui import apply_theme, page_title, site_footer
 
-st.set_page_config(page_title="RA Shift Handoff | Residence Safety", layout="wide")
+
 apply_theme("1180px")
 
 URGENCY_COLORS = {"High": "#B71C1C", "Medium": "#F2CD00", "Low": "#6B6B6B"}
@@ -34,49 +34,8 @@ def shown_text(row):
     return ""
 
 
-def get_passcode():
-    """The RA passcode lives in the app's secrets, never in the code."""
-    try:
-        value = str(st.secrets["RA_PASSWORD"])
-        return value or None
-    except Exception:
-        return None
-
-
 page_title("RA Shift Handoff", "Every report from residence, sorted by urgency.")
 
-# --- PASSWORD PROTECTION GATE ---
-if "ra_authenticated" not in st.session_state:
-    st.session_state["ra_authenticated"] = False
-
-if not st.session_state["ra_authenticated"]:
-    _, middle, _ = st.columns([1, 1.4, 1])
-    with middle:
-        with st.container(key="card_login"):
-            st.subheader("Authorized personnel only")
-            passcode = get_passcode()
-            if passcode is None:
-                st.error(
-                    "No RA passcode is set. Add a line  RA_PASSWORD=\"...\"  to the app's "
-                    "secrets, then restart the app."
-                )
-            else:
-                entered_password = st.text_input("RA passcode", type="password")
-                if st.button("Log in", type="primary", key="login_btn"):
-                    if hmac.compare_digest(entered_password, passcode):
-                        st.session_state["ra_authenticated"] = True
-                        st.rerun()
-                    else:
-                        st.error("Incorrect passcode. Access denied.")
-    site_footer()
-    st.stop()
-
-# --- RA DASHBOARD (only loads after a successful login) ---
-top_left, top_right = st.columns([5, 1])
-top_left.caption("Signed in as Resident Advisor. This page checks for new reports every 10 seconds.")
-if top_right.button("Log out", key="logout_btn"):
-    st.session_state["ra_authenticated"] = False
-    st.rerun()
 
 # Auto-refresh the page every 10 seconds
 st_autorefresh(interval=10000, limit=None, key="ra_dashboard_refresh")

@@ -333,7 +333,7 @@ def main():
     Shows the login form first. After sign-in, students are sent to the
     student report page in student_app.py. RAs are sent to ra_app.py.
     """
-    st.set_page_config(page_title="RA On-Shift Helper", page_icon="🏠")
+    st.set_page_config(page_title="RA On-Shift Helper", page_icon="🏠", layout="wide")
     st.session_state["_run_id"] = st.session_state.get("_run_id", 0) + 1
     user = require_login()
     if user is None:
