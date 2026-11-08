@@ -5,12 +5,16 @@ import pandas as pd
 
 TZ_NAME = "America/Edmonton"
 
+# Used only if the time zone database is missing (common on Windows until you run
+# "python -m pip install tzdata"). UTC-6 is Edmonton's offset right now. Change it if that ever changes.
+FALLBACK_HOURS = -6
+
 try:
     from zoneinfo import ZoneInfo
 
     LOCAL_TZ = ZoneInfo(TZ_NAME)
-except Exception:  # no time zone database installed (common on Windows without tzdata)
-    LOCAL_TZ = timezone(timedelta(hours=-7))  # Edmonton in winter
+except Exception:  # no time zone database installed
+    LOCAL_TZ = timezone(timedelta(hours=FALLBACK_HOURS))
 
 # How long an OPEN report may wait before it is flagged overdue (minutes)
 OVERDUE_AFTER_MIN = {"High": 15, "Medium": 120, "Low": 1440}
